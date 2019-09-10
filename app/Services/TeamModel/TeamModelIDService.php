@@ -4,7 +4,7 @@ namespace App\Services\TeamModel;
 
 use App\Repositories\Eloquent\Oauth2MemberRepository;
 use App\Repositories\Eloquent\Oauth2MemberLogsRepository;
-use App\Repositories\Eloquent\MemberRepository;
+use App\Repositories\MemberRepository;
 use App\Constants\Models\OAuth2MemberConstant;
 use App\Jobs\TeamModel\SendLicense;
 use App\Exceptions\ResqueException;
@@ -45,9 +45,9 @@ class TeamModelIDService
         BigBlueOrderAuthorizationService $bigBlueOrderAuthorizationService
     )
     {
-        $this->oauth2MemberRepository = $oauth2MemberRepository;
-        $this->oauth2MemberLogsRepository = $oauth2MemberLogsRepository;
-        $this->memberRepository = $memberRepository;
+        $this->oauth2MemberRepository           = $oauth2MemberRepository;
+        $this->oauth2MemberLogsRepository       = $oauth2MemberLogsRepository;
+        $this->memberRepository                 = $memberRepository;
         $this->bigBlueOrderAuthorizationService = $bigBlueOrderAuthorizationService;
     }
 
@@ -105,12 +105,12 @@ class TeamModelIDService
     public function doBinding($memberID, $teamModelId)
     {
         $data = [
-            'MemberID' => $memberID,
+            'MemberID'       => $memberID,
             'oauth2_account' => $teamModelId,
-            'sso_server' => OAuth2MemberConstant::SSO_SERVER_TEAM_MODE
+            'sso_server'     => OAuth2MemberConstant::SSO_SERVER_TEAM_MODE
         ];
 
-        $this->memberRepository->update(['Status' => 1], $memberID);
+        $this->memberRepository->update($memberID, ['Status' => 1]);
         $oauthMember = $this->oauth2MemberRepository->create($data);
         $this->oauth2MemberLogsRepository->create($data + ['flag' => 1]);
 
@@ -143,12 +143,13 @@ class TeamModelIDService
     public function unbinding($memberId, $teamModelId)
     {
         $data = [
-            'MemberID' => $memberId,
+            'MemberID'       => $memberId,
             'oauth2_account' => $teamModelId,
-            'sso_server' => OAuth2MemberConstant::SSO_SERVER_TEAM_MODE
+            'sso_server'     => OAuth2MemberConstant::SSO_SERVER_TEAM_MODE
         ];
 
         $this->oauth2MemberRepository->deleteWhere($data);
+        $this->memberRepository->update($memberId, ['Status' => 0]);
         $this->oauth2MemberLogsRepository->create($data + ['flag' => 0]);
 //        $this->memberRepository->update(['Status' => 0], $memberId);
     }

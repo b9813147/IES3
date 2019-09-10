@@ -119,9 +119,10 @@ class RegisterActivationCodeController extends Controller
 
         // 建立帳號
         $user = $this->userCreateService->createUserForTeacher([
-            'real_name' => $request->session()->get('habook.oauth.teamModelUserName', 'Teacher'),
-            'school_id' => $schoolInfo->SchoolID,
-            'status' => 0,
+            'LoginID' => $teamModelId,
+            'RealName' => $request->session()->get('habook.oauth.teamModelUserName', 'Teacher'),
+            'SchoolID' => $schoolInfo->SchoolID,
+            'Status' => 0,
             'activation_code_id' => $schoolInfo->id
         ]);
 

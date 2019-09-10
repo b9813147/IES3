@@ -2,9 +2,11 @@
 
 namespace App\Services;
 
-use App\Repositories\Eloquent\MemberRepository;
-use App\Repositories\Eloquent\SystemAuthorityRepository;
+use App\Repositories\MemberRepository;
+use App\Repositories\SystemAuthorityRepository;
 use App\Supports\TimeSupport;
+use Illuminate\Database\Eloquent\Collection;
+use Illuminate\Database\Eloquent\Model as ModelAlias;
 
 /**
  * 建立使用者相關 Service
@@ -32,7 +34,7 @@ class UserCreateService
         SystemAuthorityRepository $systemAuthorityRepository
     )
     {
-        $this->memberRepository = $memberRepository;
+        $this->memberRepository          = $memberRepository;
         $this->systemAuthorityRepository = $systemAuthorityRepository;
     }
 
@@ -44,40 +46,48 @@ class UserCreateService
      *
      * @return mixed
      *
-     * @throws \App\Exceptions\RepositoryException
      */
     public function createUserForTeacher($userData, $userAuthority = [])
     {
+
         // 使用者預設基本資料
         $defaultUserData = [
-            'login_id' => null,
-            'password' => ies_login_id_random(),
-            'real_name' => 'User',
-            'gender' => 'M',
-            'email' => '',
-            'school_id' => 0,
-            'status' => 1,
+//            'LoginID' => null,
+            'Password'           => ies_login_id_random(),
+            'RealName'           => 'User',
+            'Gender'             => 'M',
+            'Email'              => '',
+            'SchoolID'           => 0,
+            'Status'             => 1,
             'activation_code_id' => null
         ];
 
         $userData = array_merge($defaultUserData, $userData);
 
-        // 沒有帳號則建立隨機帳號
-        if (empty($userData['login_id'])) {
-            do {
-                $loginId = ies_login_id_random();
-            } while ($this->memberRepository->findWhere(['LoginID' => $loginId])->isNotEmpty());
-            $userData['login_id'] = $loginId;
+        // 檢查TeamModelID 使否 存在 並啟用
+        if ($this->memberRepository->findWhere(['LoginID' => $userData['LoginID'], 'Status' => 1])->isNotEmpty()) {
+            return false;
         }
 
+        if ($this->memberRepository->findWhere(['LoginID' => $userData['LoginID'], 'Status' => 0])->isNotEmpty()) {
+            return $this->updateUser($userData);
+        }
+
+        // 沒有帳號則建立隨機帳號
+//        if (empt$userData->['LoginID'])) {
+//            do {
+//                $loginId = ies_login_id_random();
+//            } while ($this->memberRepository->findWhere(['LoginID' => $loginId])->isNotEmpty());
+//          $userData->['LoginID'] = $loginId;
+//        }
         // 使用者權限
         $defaultUserAuthority = [
-            'id_level' => 'T',
-            's_date' => $this->currentDateString(),
-            'e_date' => $this->currentAddDayToDateString(30),
-            'analysis' => 0,
-            'ezcms_size' => 0,
-            'system_manager' => 0,
+            'IDLevel'            => 'T',
+            'SDate'              => $this->currentDateString(),
+            'EDate'              => $this->currentAddDayToDateString(30),
+            'analysis'           => 0,
+            'EzcmsSize'          => 0,
+            'SystemManager'      => 0,
             'authorization_type' => 0,
         ];
 
@@ -101,13 +111,13 @@ class UserCreateService
     {
         // 使用者預設基本資料
         $defaultUserData = [
-            'login_id' => null,
-            'password' => ies_login_id_random(),
-            'real_name' => 'User',
-            'gender' => 'M',
-            'email' => '',
-            'school_id' => 0,
-            'status' => 1,
+            'login_id'           => null,
+            'password'           => ies_login_id_random(),
+            'real_name'          => 'User',
+            'gender'             => 'M',
+            'email'              => '',
+            'school_id'          => 0,
+            'status'             => 1,
             'activation_code_id' => null
         ];
 
@@ -131,12 +141,12 @@ class UserCreateService
 
         // 使用者權限
         $defaultUserAuthority = [
-            'id_level' => 'D',
-            's_date' => $this->currentDateString(),
-            'e_date' => $this->currentAddDayToDateString(30),
-            'analysis' => 0,
-            'ezcms_size' => 0,
-            'system_manager' => 1,
+            'id_level'           => 'D',
+            's_date'             => $this->currentDateString(),
+            'e_date'             => $this->currentAddDayToDateString(30),
+            'analysis'           => 0,
+            'ezcms_size'         => 0,
+            'system_manager'     => 1,
             'authorization_type' => 2,
         ];
 
@@ -160,13 +170,13 @@ class UserCreateService
     {
         // 使用者預設基本資料
         $defaultUserData = [
-            'login_id' => null,
-            'password' => ies_login_id_random(),
-            'real_name' => 'User',
-            'gender' => 'M',
-            'email' => '',
-            'school_id' => 0,
-            'status' => 1,
+            'login_id'           => null,
+            'password'           => ies_login_id_random(),
+            'real_name'          => 'User',
+            'gender'             => 'M',
+            'email'              => '',
+            'school_id'          => 0,
+            'status'             => 1,
             'activation_code_id' => null
         ];
 
@@ -190,12 +200,12 @@ class UserCreateService
 
         // 使用者權限
         $defaultUserAuthority = [
-            'id_level' => 'D',
-            's_date' => $this->currentDateString(),
-            'e_date' => $this->currentAddDayToDateString(30),
-            'analysis' => 0,
-            'ezcms_size' => 0,
-            'system_manager' => 0,
+            'id_level'           => 'D',
+            's_date'             => $this->currentDateString(),
+            'e_date'             => $this->currentAddDayToDateString(30),
+            'analysis'           => 0,
+            'ezcms_size'         => 0,
+            'system_manager'     => 0,
             'authorization_type' => 2,
         ];
 
@@ -212,36 +222,49 @@ class UserCreateService
      *
      * @return mixed
      *
-     * @throws \App\Exceptions\RepositoryException
      */
     protected function createUser($userData, $userAuthority)
     {
         // 建立使用者帳號
         $this->memberRepository->create([
-            'LoginID' => $userData['login_id'],
-            'Password' => ies_password_hash($userData['password']),
-            'RealName' => $userData['real_name'],
-            'Gender' => $userData['gender'],
-            'Email' => $userData['email'],
-            'SchoolID' => $userData['school_id'],
-            'RegisterTime' => $this->currentTimeString(),
-            'status' => $userData['status'],
+            'LoginID'            => $userData['LoginID'],
+            'Password'           => ies_password_hash($userData['Password']),
+            'RealName'           => $userData['RealName'],
+            'Gender'             => $userData['Gender'],
+            'Email'              => $userData['Email'],
+            'SchoolID'           => $userData['SchoolID'],
+            'RegisterTime'       => $this->currentTimeString(),
+            'Status'             => $userData['Status'],
             'activation_code_id' => $userData['activation_code_id']
         ]);
 
-        $user = $this->memberRepository->findByField('LoginID', $userData['login_id'])->first();
+        $user = $this->memberRepository->firstBy('LoginID', $userData['LoginID']);
 
         // 建立使用者權限
         $this->systemAuthorityRepository->create([
-            'MemberID' => $user->MemberID,
-            'IDLevel' => $userAuthority['id_level'],
-            'SDate' => $userAuthority['s_date'],
-            'EDate' => $userAuthority['e_date'],
-            'analysis' => $userAuthority['analysis'],
-            'EzcmsSize' => $userAuthority['ezcms_size'],
-            'SystemManager' => $userAuthority['system_manager'],
+            'MemberID'           => $user->MemberID,
+            'IDLevel'            => $userAuthority['IDLevel'],
+            'SDate'              => $userAuthority['SDate'],
+            'EDate'              => $userAuthority['EDate'],
+            'analysis'           => $userAuthority['analysis'],
+            'EzcmsSize'          => $userAuthority['EzcmsSize'],
+            'SystemManager'      => $userAuthority['SystemManager'],
             'authorization_type' => $userAuthority['authorization_type'],
         ]);
+
+        return $this->memberRepository->find($user->MemberID);
+    }
+
+    /**
+     * 更新使用者帳號
+     *
+     * @param array $userData
+     * @return Collection|ModelAlias
+     */
+    protected function updateUser($userData)
+    {
+        $this->memberRepository->updateBy('LoginID', $userData['LoginID'], $userData);
+        $user = $this->memberRepository->firstBy('LoginID', $userData['LoginID']);
 
         return $this->memberRepository->find($user->MemberID);
     }
