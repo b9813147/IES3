@@ -29,6 +29,7 @@ class Course extends Model
         'CourseNO',
         'majorcode',
         'validdt',
+        'manageby',
         'Type',
         'tmcourse',
     ];

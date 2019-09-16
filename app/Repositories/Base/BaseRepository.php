@@ -3,6 +3,8 @@
 
 namespace App\Repositories\Base;
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Yish\Generators\Foundation\Repository\Repository;
 abstract class BaseRepository extends  Repository
 {

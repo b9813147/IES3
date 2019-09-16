@@ -6,6 +6,7 @@ use App\Models\Course;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use App\Repositories\Base\BaseRepository;
 
@@ -150,6 +151,20 @@ class CourseRepository extends BaseRepository
     }
 
     /**
+     * 取協同分享課程
+     *
+     * @param $memberID
+     * @param $schoolID
+     * @return Collection
+     */
+    public function getSharedCoursesByCourseNO($memberID, $schoolID)
+    {
+       return $this->model->query()
+            ->where(['shared' => 1, 'SchoolID' => $schoolID, ['MemberID', '!=', $memberID]])
+            ->pluck('CourseNO');
+    }
+
+    /**
      * 隨機產生唯一的CourseCode
      *
      * @param string $CourseCode
@@ -157,7 +172,7 @@ class CourseRepository extends BaseRepository
      */
     private function getUniqueCourseCode($CourseCode = null): string
     {
-        $CourseCode ?: $CourseCode =substr(rand(), 0, 8);
+        $CourseCode ?: $CourseCode = substr(rand(), 0, 8);
 
         for ($i = 1; $i > 0; $i++) {
             if (!$this->model->query()->where('CourseCode', $CourseCode)->exists()) {
