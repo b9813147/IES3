@@ -2,14 +2,24 @@
 
 namespace App\Services\TeamModel;
 
+use App\Models\Classpower;
+use App\Models\Course;
+use App\Models\Fc_outline;
+use App\Models\Fc_purview;
+use App\Models\Member;
+use App\Repositories\ClassPowerRepository;
+use App\Repositories\CourseRepository;
 use App\Repositories\Eloquent\Oauth2MemberRepository;
 use App\Repositories\Eloquent\Oauth2MemberLogsRepository;
+use App\Repositories\Fc_outlineRepository;
+use App\Repositories\Fc_purviewRepository;
 use App\Repositories\MemberRepository;
 use App\Constants\Models\OAuth2MemberConstant;
 use App\Jobs\TeamModel\SendLicense;
 use App\Exceptions\ResqueException;
 use App\Events\SokratesAddChannel;
 use App\Services\BigBlueOrderAuthorizationService;
+use App\Services\SemesterService;
 
 /**
  * Team Model ID 相關 Service
@@ -27,8 +37,22 @@ class TeamModelIDService
     /** @var MemberRepository */
     protected $memberRepository;
 
+    /** @var Fc_outlineRepository */
+    protected $fc_outlineRepository;
+
+    /** @var Fc_purviewRepository */
+    protected $fc_purviewRepository;
+
+    /** @var CourseRepository */
+    protected $coursesRepository;
+
+    /** @var ClassPowerRepository */
+    protected $classPowerRepository;
+
     /** @var BigBlueOrderService */
     protected $bigBlueOrderAuthorizationService;
+
+    protected $semesterService;
 
     /**
      * TeamModelIDService constructor.
@@ -37,18 +61,33 @@ class TeamModelIDService
      * @param Oauth2MemberLogsRepository $oauth2MemberLogsRepository
      * @param MemberRepository $memberRepository
      * @param BigBlueOrderAuthorizationService $bigBlueOrderAuthorizationService
+     * @param SemesterService $semesterService
+     * @param Fc_purviewRepository $fc_purviewRepository
+     * @param Fc_outlineRepository $fc_outlineRepository
+     * @param CourseRepository $coursesRepository
+     * @param ClassPowerRepository $classPowerRepository
      */
     public function __construct(
         Oauth2MemberRepository $oauth2MemberRepository,
         Oauth2MemberLogsRepository $oauth2MemberLogsRepository,
         MemberRepository $memberRepository,
-        BigBlueOrderAuthorizationService $bigBlueOrderAuthorizationService
+        BigBlueOrderAuthorizationService $bigBlueOrderAuthorizationService,
+        SemesterService $semesterService,
+        Fc_purviewRepository $fc_purviewRepository,
+        Fc_outlineRepository $fc_outlineRepository,
+        CourseRepository $coursesRepository,
+        ClassPowerRepository $classPowerRepository
     )
     {
         $this->oauth2MemberRepository           = $oauth2MemberRepository;
         $this->oauth2MemberLogsRepository       = $oauth2MemberLogsRepository;
         $this->memberRepository                 = $memberRepository;
         $this->bigBlueOrderAuthorizationService = $bigBlueOrderAuthorizationService;
+        $this->semesterService                  = $semesterService;
+        $this->fc_outlineRepository             = $fc_outlineRepository;
+        $this->fc_purviewRepository             = $fc_purviewRepository;
+        $this->coursesRepository                = $coursesRepository;
+        $this->classPowerRepository             = $classPowerRepository;
     }
 
     /**
@@ -110,6 +149,55 @@ class TeamModelIDService
             'sso_server'     => OAuth2MemberConstant::SSO_SERVER_TEAM_MODE
         ];
 
+        // 寫法待優化
+
+        // 取出公開課綱
+        $outline = $this->fc_outlineRepository->getPublicOutlineId();
+
+        // 分享名單
+        $preview = $this->fc_purviewRepository->getFcPurviewId($memberID);
+
+
+        // 檢查 是否有被加入分享過
+        if ($preview->isEmpty()) {
+            $outline->each(function ($id) use ($memberID) {
+                $this->fc_purviewRepository->AddPurview($memberID, $id);
+            });
+
+        } else if ($outline->diff($preview)->isNotEmpty()) {
+            // 尚未被加入的課綱
+            $outline->diff($preview)->each(function ($id) use ($memberID) {
+                $this->fc_purviewRepository->AddPurview($memberID, $id);
+            });
+        }
+
+        // 加入示範課程
+        $member = $this->memberRepository->findBy('MemberID', $memberID);
+
+        $semester = $this->semesterService->getCurrentSemester();
+        // 老師課程
+        $getMemberCourseBySNO = $this->coursesRepository->findWhere(['MemberID' => $memberID, 'SNO' => $semester->SNO]);
+        // 協同分享課程
+        $getSharedCourses = $this->coursesRepository->getSharedCoursesByCourseNO($member->MemberID, $member->SchoolID);
+
+        // 協同老師
+        $member_ClassPower = $this->classPowerRepository->getByTeacherClassID($member->MemberID);
+
+        //  判斷有無分享課程  及 這個老師 沒有這學期的課程
+        if ($getMemberCourseBySNO->isEmpty() && !$getSharedCourses->isEmpty()) {
+            // 判斷協同老師有被加入過
+            if ($member_ClassPower->isEmpty()) {
+                $getSharedCourses->each(function ($courseNO) use ($semester, $member) {
+                    $this->classPowerRepository->add($semester->AcademicYear, $semester->SOrder, $courseNO, $member->MemberID);
+                });
+            } else if ($getSharedCourses->diff($member_ClassPower)->isNotEmpty()) {
+                $getSharedCourses->diff($member_ClassPower)->each(function ($courseNO) use ($semester, $member) {
+                    $this->classPowerRepository->add($semester->AcademicYear, $semester->SOrder, $courseNO, $member->MemberID);
+                });
+            }
+
+        }
+
         $this->memberRepository->update($memberID, ['Status' => 1]);
         $oauthMember = $this->oauth2MemberRepository->create($data);
         $this->oauth2MemberLogsRepository->create($data + ['flag' => 1]);
@@ -123,7 +211,7 @@ class TeamModelIDService
 
         try {
             // 試用授權綁定
-            $this->bigBlueOrderAuthorizationService->updateTrialAuthorizationByTeamModelIds($teamModelId);
+//            $this->bigBlueOrderAuthorizationService->updateTrialAuthorizationByTeamModelIds($teamModelId);
 
             // 加入頻道
             event(new SokratesAddChannel($memberID, $teamModelId));
@@ -149,8 +237,16 @@ class TeamModelIDService
         ];
 
         $this->oauth2MemberRepository->deleteWhere($data);
-        $this->memberRepository->update($memberId, ['Status' => 0]);
         $this->oauth2MemberLogsRepository->create($data + ['flag' => 0]);
-//        $this->memberRepository->update(['Status' => 0], $memberId);
+        // 找出當前學校示範課程
+        $member           = $this->memberRepository->findBy('MemberID', $memberId);
+        $getSharedCourses = $this->coursesRepository->getSharedCoursesByCourseNO($memberId, $member->SchoolID);
+        // 刪除示範課程
+        $this->classPowerRepository->deleteByClassNO($getSharedCourses);
+
+        if ($this->memberRepository->findWhere(['MemberID'=> $memberId,'LoginID'=> $teamModelId])->isNotEmpty()) {
+            $this->memberRepository->update($memberId, ['Status' => 0]);
+        }
+
     }
 }
